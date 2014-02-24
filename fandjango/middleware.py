@@ -203,7 +203,7 @@ class FacebookWebMiddleware(BaseMiddleware):
 
                 components = parse_qs(response)
                 new_oauth_token = components['access_token'][0]
-                expires_at = now() + timedelta(seconds = int(components['expires'][0])
+                expires_at = now() + timedelta(seconds = int(components['expires'][0]))
 
             except GraphAPI.OAuthError:
                 pass
