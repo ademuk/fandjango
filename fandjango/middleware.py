@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.http import QueryDict, HttpResponseRedirect
-from datetime import timedelta
+from datetime import timedelta, datetime
 from urlparse import parse_qs
 
 from django.core.exceptions import ImproperlyConfigured
@@ -21,7 +21,6 @@ from facepy import SignedRequest, GraphAPI
 try:
     from django.utils.timezone import now
 except ImportError:
-    from datetime import datetime
     def now():
         return datetime.now()
 
@@ -155,7 +154,7 @@ class FacebookMiddleware(BaseMiddleware):
                 response.set_cookie('signed_request', request.facebook.signed_request.generate())
             else:
                 response.delete_cookie('signed_request')
-        
+
         return response
 
 class FacebookWebMiddleware(BaseMiddleware):
@@ -178,6 +177,7 @@ class FacebookWebMiddleware(BaseMiddleware):
 
         request.facebook = Facebook()
         oauth_token = False
+        new_oauth_token = False
 
         # Is there a token cookie already present?
         if 'oauth_token' in request.COOKIES:
@@ -200,24 +200,38 @@ class FacebookWebMiddleware(BaseMiddleware):
                     client_secret = FACEBOOK_APPLICATION_SECRET_KEY,
                     code = request.GET['code'],
                 )
-        
+
                 components = parse_qs(response)
-                
-                # Save new OAuth-token in DB
-                oauth_token, new_oauth_token = OAuthToken.objects.get_or_create(
-                    token = components['access_token'][0],
-                    issued_at = now(),
-                    expires_at = now() + timedelta(seconds = int(components['expires'][0]))
-                )
+                new_oauth_token = components['access_token'][0]
+                expires_at = now() + timedelta(seconds = int(components['expires'][0])
 
             except GraphAPI.OAuthError:
                 pass
-        
+
+        elif 'oauth_token' in request.POST:
+            try:
+                new_oauth_token = request.POST['oauth_token']
+                app_token = [FACEBOOK_APPLICATION_ID, FACEBOOK_APPLICATION_SECRET_KEY].join("|")
+                graph = GraphAPI()
+                response = graph.get('debug_token', input_token=new_oauth_token,
+                                 access_token=app_token)
+                expires_at = datetime.fromtimestamp(response['expires_at'])
+            except GraphAPI.OAuthError:
+                new_oauth_token = False
+
+        if new_oauth_token:
+            # Save new OAuth-token in DB
+            oauth_token, oauth_token_is_new = OAuthToken.objects.get_or_create(
+                token = new_oauth_token,
+                issued_at = now(),
+                expires_at = expires_at
+            )
+
         # There isn't a valid access_token
         if not oauth_token or oauth_token.expired:
             request.facebook = False
             return
-        
+
         # Is there a user already connected to the current token?
         try:
             user = oauth_token.user
@@ -229,7 +243,7 @@ class FacebookWebMiddleware(BaseMiddleware):
         except User.DoesNotExist:
             graph = GraphAPI(oauth_token.token)
             profile = graph.get('me')
-            
+
             # Either the user already exists and its just a new token, or user and token both are new
             try:
                 user = User.objects.get(facebook_id = profile.get('id'))
@@ -245,16 +259,16 @@ class FacebookWebMiddleware(BaseMiddleware):
                 user = User.objects.create(
                     facebook_id = profile.get('id'),
                     oauth_token = oauth_token
-                )                    
-            
+                )
+
             user.synchronize(profile)
-            
+
             # Delete old access token if there is any and  only if the new one is different
             old_oauth_token = None
             if user.oauth_token != oauth_token:
                 old_oauth_token = user.oauth_token
                 user.oauth_token = oauth_token
-            
+
             user.save()
 
             if old_oauth_token:
