@@ -66,7 +66,7 @@ TEST_GRAPH_ACCESS_TOKEN_RESPONSE = '&access_token=%s&expires=%d' % ('ABCDE', 999
 TEST_GRAPH_ME_RESPONSE = {
     'id': '12345',
     'username': 'foobar',
-    'name': 'Foo Bar', 
+    'name': 'Foo Bar',
     'first_name': 'Foo',
     'last_name': 'Bar',
     'birthday': '03/03/2000',
@@ -82,7 +82,7 @@ call_command('migrate', interactive=False)
 request_factory = RequestFactory()
 
 class TestFacebookMiddleware(unittest.TestCase):
-    
+
     def setUp(self):
         settings.MIDDLEWARE_CLASSES = [
             'fandjango.middleware.FacebookMiddleware'
@@ -156,7 +156,7 @@ class TestFacebookMiddleware(unittest.TestCase):
         """
         Verify that the view referred to by AUTHORIZATION_DENIED_VIEW is
         rendered upon refusing to authorize the application.
-        """    
+        """
         client = Client()
 
         response = client.get(
@@ -252,7 +252,7 @@ class TestFacebookMiddleware(unittest.TestCase):
 
         with patch.object(GraphAPI, 'get') as graph_get:
             graph_get.return_value = {}
-            
+
             client.post(
                 path = reverse('home'),
                 data = {
@@ -288,7 +288,7 @@ class TestFacebookMiddleware(unittest.TestCase):
                     {'installed': True}
                 ]
             }
-            
+
             assert 'installed' in user.permissions
 
     def test_extend_oauth_token(self):
@@ -399,7 +399,7 @@ class TestFacebookWebMiddleware(unittest.TestCase):
         """
         Verify that the view referred to by AUTHORIZATION_DENIED_VIEW is
         rendered upon refusing to authorize the application.
-        """    
+        """
         client = Client()
 
         response = client.get(
@@ -523,7 +523,7 @@ class TestFacebookWebMiddleware(unittest.TestCase):
                     {'installed': True}
                 ]
             }
-            
+
             assert 'installed' in user.permissions
 
     def test_extend_oauth_token(self):
@@ -641,6 +641,37 @@ class TestFacebookWebMiddleware(unittest.TestCase):
             )
 
         assert OAuthToken.objects.count() == 1
+
+    def test_post_access_token_registration(self):
+        """
+        Verify that authorizing the application by POSTing an at will register a new user.
+        """
+        client = Client()
+
+        with patch.object(GraphAPI, 'get') as graph_get:
+
+            def side_effect(*args, **kwargs):
+                if args[0] == 'debug_token':
+                    return {
+                        'expires_at': time() + 999999
+                    }
+                elif args[0] == 'me':
+                    return TEST_GRAPH_ME_RESPONSE
+
+            graph_get.side_effect = side_effect
+
+            client.post(
+                path = reverse('home'),
+                data = {
+                    'oauth_token': TEST_AUTH_CODE
+                }
+            )
+
+        user = User.objects.get(id=1)
+
+        assert TEST_GRAPH_ME_RESPONSE['first_name'] == user.first_name
+        assert TEST_GRAPH_ME_RESPONSE['last_name'] == user.last_name
+        assert TEST_GRAPH_ME_RESPONSE['link'] == user.extra_data.get('link')
 
 class TestFacebookMultipleMiddleware(unittest.TestCase):
 

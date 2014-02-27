@@ -211,11 +211,11 @@ class FacebookWebMiddleware(BaseMiddleware):
         elif 'oauth_token' in request.POST:
             try:
                 new_oauth_token = request.POST['oauth_token']
-                app_token = [FACEBOOK_APPLICATION_ID, FACEBOOK_APPLICATION_SECRET_KEY].join("|")
+                app_token = str(FACEBOOK_APPLICATION_ID) + "|" + FACEBOOK_APPLICATION_SECRET_KEY
                 graph = GraphAPI()
                 response = graph.get('debug_token', input_token=new_oauth_token,
-                                 access_token=app_token)
-                expires_at = datetime.fromtimestamp(response['expires_at'])
+                                     access_token=app_token)
+                expires_at = datetime.fromtimestamp(response['expires_at']).replace(tzinfo=tzlocal())
             except GraphAPI.OAuthError:
                 new_oauth_token = False
 
