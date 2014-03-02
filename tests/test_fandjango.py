@@ -653,7 +653,9 @@ class TestFacebookWebMiddleware(unittest.TestCase):
             def side_effect(*args, **kwargs):
                 if args[0] == 'debug_token':
                     return {
-                        'expires_at': time() + 999999
+                        'data': {
+                            'expires_at': time() + 999999
+                        }
                     }
                 elif args[0] == 'me':
                     return TEST_GRAPH_ME_RESPONSE

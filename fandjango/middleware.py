@@ -215,7 +215,7 @@ class FacebookWebMiddleware(BaseMiddleware):
                 graph = GraphAPI()
                 response = graph.get('debug_token', input_token=new_oauth_token,
                                      access_token=app_token)
-                expires_at = datetime.fromtimestamp(response['expires_at']).replace(tzinfo=tzlocal())
+                expires_at = datetime.fromtimestamp(response['data']['expires_at']).replace(tzinfo=tzlocal())
             except GraphAPI.OAuthError:
                 new_oauth_token = False
 
