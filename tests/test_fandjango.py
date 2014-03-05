@@ -29,7 +29,7 @@ except ImportError:
 
 from time import time
 
-def get_signed_request():
+def get_signed_request(expired=False):
     payload = {
        'algorithm': 'HMAC-SHA256',
        'user': {
@@ -41,6 +41,10 @@ def get_signed_request():
        'issued_at': time(),
        'user_id': 12345
     }
+
+    if expired:
+        payload['expires'] = time() - 100
+        payload['issued_at'] = time() - 200
 
     encoded_payload = base64.urlsafe_b64encode(
         json.dumps(payload, separators=(',', ':'))
@@ -60,6 +64,7 @@ def get_signed_request():
 TEST_APPLICATION_ID     = '181259711925270'
 TEST_APPLICATION_SECRET = '214e4cb484c28c35f18a70a3d735999b'
 TEST_SIGNED_REQUEST = get_signed_request()
+TEST_SIGNED_REQUEST_EXPIRED = get_signed_request(True)
 TEST_AUTH_CODE = 'TEST_CODE'
 TEST_ACCESS_TOKEN = 'ABCDE'
 TEST_GRAPH_ACCESS_TOKEN_RESPONSE = '&access_token=%s&expires=%d' % ('ABCDE', 99999)
@@ -344,6 +349,24 @@ class TestFacebookMiddleware(unittest.TestCase):
             )
 
         assert response.status_code != 401
+
+    def test_signed_request_expired(self):
+        """
+        Auth with expired signed_request results in request.facebook = False
+        """
+
+        facebook_middleware = FacebookMiddleware()
+
+        request = request_factory.post(
+            path = reverse('home'),
+            data = {
+                'signed_request': TEST_SIGNED_REQUEST_EXPIRED
+            }
+        )
+
+        facebook_middleware.process_request(request)
+
+        self.assertFalse(request.facebook)
 
 class TestFacebookWebMiddleware(unittest.TestCase):
 
